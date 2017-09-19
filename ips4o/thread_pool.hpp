@@ -146,68 +146,59 @@ class StdThreadPool {
         int num_threads_;
         bool done_ = false;
 
-        Impl(int num_threads);
-        ~Impl();
+        /**
+        * Constructor for the std::thread pool.
+        */
+        Impl(int num_threads)
+            : sync_(std::max(1, num_threads))
+            , pool_barrier_(std::max(1, num_threads))
+            , num_threads_(std::max(1, num_threads))
+        {
+            threads_.reserve(num_threads_ - 1);
+            for (int i = 1; i < num_threads_; ++i)
+                threads_.emplace_back(&Impl::main, this, i);
+        }
 
+        /**
+         * Destructor for the std::thread pool.
+         */
+        ~Impl() {
+            done_ = true;
+            pool_barrier_.barrier();
+            for (auto& t : threads_)
+                t.join();
+        }
+
+        /**
+        * Entry point for parallel execution for the std::thread pool.
+        */
         template <class F>
-        inline void run(F&& func, const int num_threads);
+        void run(F&& func, const int num_threads) {
+            func_ = func;
+            num_threads_ = num_threads;
+            sync_.setNumThreads(num_threads);
 
-        inline void main(const int my_id);
+            pool_barrier_.barrier();
+            func_(0, num_threads);
+            pool_barrier_.barrier();
+        }
+
+        /**
+        * Main loop for threads created by the std::thread pool.
+        */
+        void main(const int my_id) {
+            for (;;) {
+                pool_barrier_.barrier();
+                if (done_) break;
+                if (my_id < num_threads_)
+                    func_(my_id, num_threads_);
+                pool_barrier_.barrier();
+            }
+        }
     };
 
     std::unique_ptr<Impl> impl_;
 };
-
-/**
- * Constructor for the std::thread pool.
- */
-StdThreadPool::Impl::Impl(int num_threads)
-    : sync_(std::max(1, num_threads))
-    , pool_barrier_(std::max(1, num_threads))
-    , num_threads_(num_threads)
-{
-    num_threads = std::max(1, num_threads);
-    threads_.reserve(num_threads - 1);
-    for (int i = 1; i < num_threads; ++i)
-        threads_.emplace_back(&Impl::main, this, i);
-}
-
-/**
- * Destructor for the std::thread pool.
- */
-StdThreadPool::Impl::~Impl() {
-    done_ = true;
-    pool_barrier_.barrier();
-    for (auto& t : threads_)
-        t.join();
-}
-
-/**
- * Entry point for parallel execution for the std::thread pool.
- */
-template <class F>
-void StdThreadPool::Impl::run(F&& func, int num_threads) {
-    func_ = func;
-    num_threads_ = num_threads;
-    sync_.setNumThreads(num_threads);
-
-    pool_barrier_.barrier();
-    func_(0, num_threads);
-    pool_barrier_.barrier();
-}
-
-/**
- * Main loop for threads created by the std::thread pool.
- */
-void StdThreadPool::Impl::main(const int my_id) {
-    for (;;) {
-        pool_barrier_.barrier();
-        if (done_) break;
-        if (my_id < num_threads_)
-            func_(my_id, num_threads_);
-        pool_barrier_.barrier();
-    }
-}
 
 #endif  // _REENTRANT
 
