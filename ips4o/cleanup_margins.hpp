@@ -78,7 +78,7 @@ std::pair<int, typename Cfg::difference_type> Sorter<Cfg>::saveMargins(int last_
     }
 
     // Read excess elements, if necessary
-    if (tail != end)
+    if (tail != end && begin_ + tail < end_)
         local_.swap[0].readFrom(begin_ + tail, end - tail);
 
     return {last_bucket, end - tail};
