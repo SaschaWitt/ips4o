@@ -110,9 +110,9 @@ template <class Cfg>
 void Sorter<Cfg>::parallelClassification(const bool use_equal_buckets) {
     // Compute stripe for each thread
     const auto elements_per_thread = static_cast<double>(end_ - begin_) / num_threads_;
-    const auto my_begin = begin_ + Cfg::alignToNextBlock(my_id_ * elements_per_thread);
+    const auto my_begin = begin_ + Cfg::alignToNextBlock(my_id_ * elements_per_thread + 0.5);
     const auto my_end = [&] {
-        auto e = begin_ + Cfg::alignToNextBlock((my_id_ + 1) * elements_per_thread);
+        auto e = begin_ + Cfg::alignToNextBlock((my_id_ + 1) * elements_per_thread + 0.5);
         e = end_ < e ? end_ : e;
         return e;
     }();

@@ -51,35 +51,32 @@ namespace detail {
  */
 template <class Cfg>
 std::pair<int, typename Cfg::difference_type> Sorter<Cfg>::saveMargins(int last_bucket) {
-    diff_t tail = 0;
-    diff_t end = 0;
-    // The last thread doesn't have to do anything
-    if (my_id_ != num_threads_ - 1) {
-        // Find last bucket boundary in this thread's area
-        tail = bucket_start_[last_bucket];
-        end = Cfg::alignToNextBlock(tail);
-        // Don't need to do anything if there is no overlap
-        if (tail != end) {
-            const auto start_of_last_block = end - Cfg::kBlockSize;
-            // Find bucket this last block belongs to
-            diff_t last_start;
-            do {
-                --last_bucket;
-                last_start = bucket_start_[last_bucket];
-            } while (last_start > start_of_last_block);
+    // Find last bucket boundary in this thread's area
+    diff_t tail = bucket_start_[last_bucket];
+    const diff_t end = Cfg::alignToNextBlock(tail);
 
-            // Check if the last block has been written
-            const auto write = shared_->bucket_pointers[last_bucket].getWrite();
-            if (write < end)
-                tail = end;
-            else
-                tail = bucket_start_[last_bucket + 1];
-        }
+    // Don't need to do anything if there is no overlap, or we are in the overflow case
+    if (tail == end || end >= (end_ - begin_))
+        return {-1, 0};
+
+    // Find bucket this last block belongs to
+    {
+        const auto start_of_last_block = end - Cfg::kBlockSize;
+        diff_t last_start;
+        do {
+            --last_bucket;
+            last_start = bucket_start_[last_bucket];
+        } while (last_start > start_of_last_block);
     }
 
+    // Check if the last block has been written
+    const auto write = shared_->bucket_pointers[last_bucket].getWrite();
+    if (write < end)
+        return {-1, 0};
+
     // Read excess elements, if necessary
-    if (tail != end)
-        local_.swap[0].readFrom(begin_ + tail, end - tail);
+    tail = bucket_start_[last_bucket + 1];
+    local_.swap[0].readFrom(begin_ + tail, end - tail);
 
     return {last_bucket, end - tail};
 }
@@ -104,44 +101,37 @@ void Sorter<Cfg>::writeMargins(const int first_bucket, const int last_bucket,
         auto remaining = Cfg::alignToNextBlock(bstart) - bstart;
 
         if (i == overflow_bucket && overflow_) {
+            // Is there overflow?
+
             // Overflow buffer has been written => write pointer must be at end of bucket
             IPS4O_ASSUME_NOT(Cfg::alignToNextBlock(bend) != bwrite);
 
             auto src = overflow_->data();
+            // There must be space for at least BlockSize elements
             IPS4O_ASSUME_NOT((bend - (bwrite - Cfg::kBlockSize)) + remaining < Cfg::kBlockSize);
             auto tail_size = Cfg::kBlockSize - remaining;
 
             // Fill head
-            while (remaining--)
-                *dst++ = std::move(*src++);
+            std::move(src, src + remaining, dst);
+            src += remaining;
+            remaining = std::numeric_limits<diff_t>::max();
 
             // Write remaining elements into tail
             dst = begin_ + bwrite - Cfg::kBlockSize;
-            remaining = std::numeric_limits<diff_t>::max();
-            while (tail_size--)
-                *dst++ = std::move(*src++);
+            dst = std::move(src, src + tail_size, dst);
 
             overflow_->reset(Cfg::kBlockSize);
         } else if (i == swap_bucket && in_swap_buffer) {
+            // Did we save this in saveMargins?
+
             // Bucket of last block in this thread's area => write swap buffer
             auto src = local_.swap[0].data();
-            auto n = remaining <= in_swap_buffer ? remaining : in_swap_buffer;
+            // All elements from the buffer must fit
+            IPS4O_ASSUME_NOT(in_swap_buffer > remaining);
 
-            // Write to head first
-            remaining -= n;
-            const auto left_in_swap = in_swap_buffer - n;
-            while (n--)
-                *dst++ = std::move(*src++);
-
-            if (!remaining) {
-                // Then, write to tail
-                dst = begin_ + bwrite;
-                remaining = std::numeric_limits<diff_t>::max();
-
-                n = left_in_swap;
-                while (n--)
-                    *dst++ = std::move(*src++);
-            }
+            // Write to head
+            dst = std::move(src, src + in_swap_buffer, dst);
+            remaining -= in_swap_buffer;
 
             local_.swap[0].reset(in_swap_buffer);
         } else if (bwrite > bend && bend - bstart > Cfg::kBlockSize) {
@@ -154,9 +144,8 @@ void Sorter<Cfg>::writeMargins(const int first_bucket, const int last_bucket,
             IPS4O_ASSUME_NOT(head_size > remaining);
 
             // Write to head
+            dst = std::move(src, src + head_size, dst);
             remaining -= head_size;
-            while (head_size--)
-                *dst++ = std::move(*src++);
         }
 
         // Write elements from buffers
@@ -165,20 +154,19 @@ void Sorter<Cfg>::writeMargins(const int first_bucket, const int last_bucket,
             auto src = buffers.data(i);
             auto count = buffers.size(i);
 
-            while (count) {
-                // Fill the head first ...
-                auto n = count <= remaining ? count : remaining;
-                count -= n;
-                remaining -= n;
-                while (n--)
-                    *dst++ = std::move(*src++);
+            if (count <= remaining) {
+                dst = std::move(src, src + count, dst);
+                remaining -= count;
+            } else {
+                std::move(src, src + remaining, dst);
+                src += remaining;
+                count -= remaining;
+                remaining = std::numeric_limits<diff_t>::max();
 
-                if (!remaining) {
-                    // ... then write the remaining elements into empty blocks and the tail
-                    dst = begin_ + bwrite;
-                    remaining = std::numeric_limits<diff_t>::max();
-                }
+                dst = begin_ + bwrite;
+                dst = std::move(src, src + count, dst);
             }
+
             buffers.reset(i);
         }
 

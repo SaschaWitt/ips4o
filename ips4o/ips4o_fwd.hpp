@@ -47,7 +47,7 @@ inline void baseCaseSort(It begin, It end, Comp&& comp);
 inline constexpr unsigned long log2(unsigned long n);
 
 template <class It, class RandomGen>
-inline void selectSample(It begin, const It end,
+inline void selectSample(It begin, It end,
                          typename std::iterator_traits<It>::difference_type num_samples,
                          RandomGen&& gen);
 
@@ -67,11 +67,11 @@ class Sorter {
     struct SharedData;
     explicit Sorter(LocalData& local) : local_(local) {}
 
-    void sequential(const iterator begin, const iterator end);
+    void sequential(iterator begin, iterator end);
 
 #if defined(_REENTRANT) || defined(_OPENMP)
     template <class TaskSorter>
-    void parallelPrimary(const iterator begin, const iterator end, SharedData& shared,
+    void parallelPrimary(iterator begin, iterator end, SharedData& shared,
                          int num_threads, TaskSorter&& task_sorter);
 
     void parallelSecondary(SharedData& shared, int id, int num_threads);
@@ -92,45 +92,40 @@ class Sorter {
     int my_id_;
     int num_threads_;
 
-    static inline int computeLogBuckets(const diff_t n);
+    static inline int computeLogBuckets(diff_t n);
 
-    std::pair<int, bool> buildClassifier(const iterator begin, const iterator end,
-                                         Classifier& classifier);
+    std::pair<int, bool> buildClassifier(iterator begin, iterator end, Classifier& classifier);
 
     template <bool kEqualBuckets> __attribute__((flatten))
-    diff_t classifyLocally(const iterator my_begin, const iterator my_end);
+    diff_t classifyLocally(iterator my_begin, iterator my_end);
 
-    inline void parallelClassification(const bool use_equal_buckets);
+    inline void parallelClassification(bool use_equal_buckets);
 
-    inline void sequentialClassification(const bool use_equal_buckets);
+    inline void sequentialClassification(bool use_equal_buckets);
 
-    void moveEmptyBlocks(const diff_t my_begin, const diff_t my_end,
-                         const diff_t my_first_empty_block);
+    void moveEmptyBlocks(diff_t my_begin, diff_t my_end, diff_t my_first_empty_block);
 
     inline int computeOverflowBucket();
 
     template <bool kEqualBuckets, bool kIsParallel>
-    inline int classifyAndReadBlock(const int read_bucket);
+    inline int classifyAndReadBlock(int read_bucket);
 
     template <bool kEqualBuckets, bool kIsParallel>
-    inline int swapBlock(const diff_t max_off, const int dest_bucket,
-                         const bool current_swap);
+    inline int swapBlock(diff_t max_off, int dest_bucket, bool current_swap);
 
     template <bool kEqualBuckets, bool kIsParallel>
     void permuteBlocks();
 
     inline std::pair<int, diff_t> saveMargins(int last_bucket);
 
-    void writeMargins(const int first_bucket, const int last_bucket,
-                      const int overflow_bucket, const int swap_bucket,
-                      const diff_t in_swap_buffer);
+    void writeMargins(int first_bucket, int last_bucket, int overflow_bucket,
+                      int swap_bucket, diff_t in_swap_buffer);
 
     template <bool kIsParallel>
-    std::pair<int, bool> partition(const iterator begin, const iterator end,
-                                   diff_t* const bucket_start, SharedData* const shared,
-                                   const int my_id, const int num_threads);
+    std::pair<int, bool> partition(iterator begin, iterator end, diff_t* bucket_start,
+                                   SharedData* shared, int my_id, int num_threads);
 
-    inline void processSmallTasks(const iterator begin, SharedData& shared);
+    inline void processSmallTasks(iterator begin, SharedData& shared);
 };
 
 }  // namespace detail
