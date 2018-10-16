@@ -107,79 +107,78 @@ void Sorter<Cfg>::moveEmptyBlocks(const diff_t my_begin, const diff_t my_end,
         const auto bucket_start = Cfg::alignToNextBlock(bucket_start_[overlapping_bucket]);
 
         // If it is a very large bucket, other threads will also move blocks around in it (case 3)
-        diff_t blocks_reserved = 0;
+        // Count how many filled blocks are in this bucket
+        diff_t flushed_elements_in_bucket = 0;
         if (bucket_start < my_begin) {
             int prev_id = my_id_ - 1;
-            do {
+            // Iterate over stripes which are completely contained in this bucket
+            while (bucket_start < shared_->local[prev_id]->first_block) {
                 const auto eb = shared_->local[prev_id]->first_empty_block;
-                blocks_reserved += shared_->local[prev_id + 1]->first_block - std::max(eb, bucket_start);
-            } while (prev_id-- && bucket_start < shared_->local[prev_id + 1]->first_block);
+                flushed_elements_in_bucket += eb - shared_->local[prev_id]->first_block;
+                --prev_id;
+            }
+            // Count blocks in stripe where bucket starts
+            const auto eb = shared_->local[prev_id]->first_empty_block;
+            // Check if there are any filled blocks in this bucket
+            if (eb > bucket_start)
+                flushed_elements_in_bucket += eb - bucket_start;
         }
 
-        // Find stripe which contains last block of this bucket
-        // Off by one because it is decreased in updateReadPointers
-        int read_from_thread = my_id_;
+        // Threads to our left will move this many blocks (0 if we are the left-most thread)
+        diff_t elements_reserved = 0;
+        if (my_begin > bucket_start) {
+            // Thread to the left of us get priority
+            elements_reserved = my_begin - bucket_start - flushed_elements_in_bucket;
+
+            // Count how many elements we flushed into this bucket
+            flushed_elements_in_bucket += my_first_empty_block - my_begin;
+        } else if (my_first_empty_block > bucket_start) {
+            // We are the left-most thread
+            // Count how many elements we flushed into this bucket
+            flushed_elements_in_bucket += my_first_empty_block - bucket_start;
+        }
+
+        // Find stripe which contains last block of this bucket (off by one)
+        // Also continue counting how many filled blocks are in this bucket
+        int read_from_thread = my_id_ + 1;
         while (read_from_thread < num_threads_
-               && bucket_end > shared_->local[read_from_thread]->first_block)
+               && bucket_end > shared_->local[read_from_thread]->first_block) {
+            const auto eb = std::min<diff_t>(shared_->local[read_from_thread]->first_empty_block, bucket_end);
+            flushed_elements_in_bucket += eb - shared_->local[read_from_thread]->first_block;
             ++read_from_thread;
+        }
 
-        // write_ptr points to first empty block in this bucket
+        // After moving blocks, this will be the first empty block in this bucket
+        const auto first_empty_block_in_bucket = bucket_start + flushed_elements_in_bucket;
+
+        // This is the range of blocks we want to fill
         auto write_ptr = begin_ + std::max(my_first_empty_block, bucket_start);
-        const auto write_ptr_end = begin_ + my_end;
+        const auto write_ptr_end = begin_ + std::min(first_empty_block_in_bucket, my_end);
 
-        // read_ptr goes right-to-left
-        diff_t read_ptr = -1, read_ptr_end = 0;
-        const auto updateReadPointers = [&] {
-            // Find next block to read in previous stripe when the current stripe is empty
-            while (read_ptr <= read_ptr_end) {
-                --read_from_thread;
-                read_ptr = std::min(shared_->local[read_from_thread]->first_empty_block, bucket_end)
-                           - Cfg::kBlockSize;
-                read_ptr_end = shared_->local[read_from_thread]->first_block - Cfg::kBlockSize;
-                if (read_from_thread == my_id_) return false;
-            }
-            return true;
-        };
+        // Read from other stripes until we filled our blocks
+        while (write_ptr < write_ptr_end) {
+            --read_from_thread;
+            // This is the range of blocks we can read from stripe 'read_from_thread'
+            auto read_ptr = std::min(shared_->local[read_from_thread]->first_empty_block, bucket_end);
+            auto read_range_size = read_ptr - shared_->local[read_from_thread]->first_block;
 
-        // Read pointer will get updated one more time after last block has been written
-        while (updateReadPointers() && write_ptr < write_ptr_end) {
             // Skip reserved blocks
-            if (blocks_reserved >= (read_ptr - read_ptr_end)) {
-                blocks_reserved -= (read_ptr - read_ptr_end);
-                read_ptr = read_ptr_end;
+            if (elements_reserved >= read_range_size) {
+                elements_reserved -= read_range_size;
                 continue;
             }
-            read_ptr -= blocks_reserved;
-            blocks_reserved = 0;
-            // Move blocks from end of bucket into gap
-            while (read_ptr > read_ptr_end && write_ptr < write_ptr_end) {
-                std::move(begin_ + read_ptr, begin_ + read_ptr + Cfg::kBlockSize, write_ptr);
-                read_ptr -= Cfg::kBlockSize;
-                write_ptr += Cfg::kBlockSize;
-            }
+            read_ptr -= elements_reserved;
+            read_range_size -= elements_reserved;
+            elements_reserved = 0;
+
+            // Move blocks
+            const auto size = std::min(read_range_size, write_ptr_end - write_ptr);
+            write_ptr = std::move(begin_ + read_ptr - size, begin_ + read_ptr, write_ptr);
         }
 
-        /* Set bucket pointers if the last filled block in the bucket is in our stripe.
-         * There are 4 cases:
-         * 1)  We filled our empty blocks, and there are no more filled blocks to our right.
-         * 2)  We filled our empty blocks, there are some more filled blocks to our right,
-         *     and the bucket ends in the next stripe.
-         * 3)  We didn't fill all our empty blocks, but we wrote at least one filled block.
-         *     This means that we own the last filled block in the bucket.
-         * 4)  We didn't do anything, and we are the left-most thread.
-         *     This means no one else did anything, either.
-         */
-        if (write_ptr == write_ptr_end) {
-            if (read_from_thread == my_id_) {
-                // Case 1)
-                bucket_pointers_[overlapping_bucket].set(bucket_start, write_ptr - begin_ - Cfg::kBlockSize);
-            } else if (read_from_thread == my_id_ + 1) {
-                // Case 2)
-                bucket_pointers_[overlapping_bucket].set(bucket_start, read_ptr);
-            }
-        } else if (write_ptr - begin_ > std::max(my_first_empty_block, bucket_start) || bucket_start >= my_begin) {
-            // Case 3) or Case 4)
-            bucket_pointers_[overlapping_bucket].set(bucket_start, write_ptr - begin_ - Cfg::kBlockSize);
+        // Set bucket pointers if the bucket starts in this stripe
+        if (my_begin <= bucket_start) {
+            bucket_pointers_[overlapping_bucket].set(bucket_start, first_empty_block_in_bucket - Cfg::kBlockSize);
         }
     }
 }
