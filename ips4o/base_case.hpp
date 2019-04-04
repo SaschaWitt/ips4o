@@ -53,7 +53,7 @@ void insertionSort(const It begin, const It end, Comp comp) {
     IPS4O_ASSUME_NOT(begin >= end);
 
     for (It it = begin + 1; it < end; ++it) {
-        auto val = std::move(*it);
+        typename std::iterator_traits<It>::value_type val = std::move(*it);
         if (comp(val, *begin)) {
             std::move_backward(begin, it, it + 1);
             *begin = std::move(val);
