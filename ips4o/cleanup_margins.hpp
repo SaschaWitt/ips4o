@@ -56,7 +56,7 @@ std::pair<int, typename Cfg::difference_type> Sorter<Cfg>::saveMargins(int last_
     const diff_t end = Cfg::alignToNextBlock(tail);
 
     // Don't need to do anything if there is no overlap, or we are in the overflow case
-    if (tail == end || end >= (end_ - begin_))
+    if (tail == end || end > (end_ - begin_))
         return {-1, 0};
 
     // Find bucket this last block belongs to
