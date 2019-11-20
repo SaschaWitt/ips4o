@@ -158,7 +158,7 @@ class ParallelSorter {
             , shared_ptr_(Cfg::kDataAlignment, std::move(comp), thread_pool_.sync(), thread_pool_.numThreads())
             , buffer_storage_(thread_pool_.numThreads())
             , local_ptrs_(new detail::AlignedPtr<typename Sorter::LocalData>[thread_pool_.numThreads()])
-            , task_sorter_({}, buffer_storage_.forThread(0))
+            , task_sorter_(false, {}, buffer_storage_.forThread(0))
     {
         // Allocate local data
         thread_pool_([this](int my_id, int) {
@@ -204,7 +204,7 @@ class ParallelSorter {
     SequentialSorter<ExtendedConfig<
                 std::vector<detail::ParallelTask>::iterator,
                 std::greater<>, typename Cfg::BaseConfig
-            >> task_sorter_;
+                       >> task_sorter_;
 };
 
 }  // namespace ips4o

@@ -94,18 +94,27 @@ class SequentialSorter {
     using iterator = typename Cfg::iterator;
 
  public:
-    explicit SequentialSorter(typename Cfg::less comp)
-            : buffer_storage_(1)
+  explicit SequentialSorter(bool check_sorted, typename Cfg::less comp)
+    : check_sorted(check_sorted)
+    , buffer_storage_(1)
             , local_ptr_(Cfg::kDataAlignment, std::move(comp), buffer_storage_.get()) {}
 
-    explicit SequentialSorter(typename Cfg::less comp, char* buffer_storage)
-            : local_ptr_(Cfg::kDataAlignment, std::move(comp), buffer_storage) {}
+    explicit SequentialSorter(bool check_sorted, typename Cfg::less comp, char* buffer_storage)
+            : check_sorted(check_sorted)
+    , local_ptr_(Cfg::kDataAlignment, std::move(comp), buffer_storage) {}
 
     void operator()(iterator begin, iterator end) {
+      if (check_sorted) {
+        const bool sorted = detail::sortedCaseSort(begin, end,
+                                                   local_ptr_.get().classifier.getComparator());
+        if (sorted) return;
+      }
+  
         Sorter(local_ptr_.get()).sequential(std::move(begin), std::move(end));
     }
 
  private:
+  const bool check_sorted;
     typename Sorter::BufferStorage buffer_storage_;
     detail::AlignedPtr<typename Sorter::LocalData> local_ptr_;
 };

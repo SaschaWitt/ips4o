@@ -77,6 +77,32 @@ inline void baseCaseSort(It begin, It end, Comp&& comp) {
     detail::insertionSort(std::move(begin), std::move(end), std::forward<Comp>(comp));
 }
 
+template <class It, class Comp>
+inline bool sortedCaseSort(It begin, It end, Comp&& comp) {
+  if (begin == end) {
+    return true;
+  }
+  
+  // If last element is not smaller than first element,
+  // test if input is sorted (input is not reverse sorted).
+  if (!comp(*(end - 1), *begin)) {
+    if (std::is_sorted(begin, end, comp)) {
+      return true;
+    }
+  } else {
+    // Check whether the input is reverse sorted.
+    for (It it = begin; (it + 1) != end; ++it) {
+      if (comp(*begin , *(begin + 1))) {
+        return false;
+      }
+    }
+    std::reverse(begin, end);
+    return true;
+  }
+
+  return false;
+}
+
 
 }  // namespace detail
 }  // namespace ips4o
