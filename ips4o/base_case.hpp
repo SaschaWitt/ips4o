@@ -92,7 +92,7 @@ inline bool sortedCaseSort(It begin, It end, Comp&& comp) {
   } else {
     // Check whether the input is reverse sorted.
     for (It it = begin; (it + 1) != end; ++it) {
-      if (comp(*begin , *(begin + 1))) {
+      if (comp(*it , *(it + 1))) {
         return false;
       }
     }
