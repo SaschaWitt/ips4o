@@ -117,7 +117,7 @@ void Sorter<Cfg>::writeMargins(const int first_bucket, const int last_bucket,
             remaining = std::numeric_limits<diff_t>::max();
 
             // Write remaining elements into tail
-            dst = begin_ + bwrite - Cfg::kBlockSize;
+            dst = begin_ + (bwrite - Cfg::kBlockSize);
             dst = std::move(src, src + tail_size, dst);
 
             overflow_->reset(Cfg::kBlockSize);
