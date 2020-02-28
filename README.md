@@ -36,7 +36,7 @@ If you get undefined references to `__atomic_fetch_add_16`, either set your CPU 
 
 ## Licensing
 
-IPS⁴o is free software provided under the BSD 2-Clause License described in the [LICENSE file](LICENSE). If you use IPS⁴o in an academic setting please cite the [eponymous paper](https://arxiv.org/abs/1705.02257) and use the following BibTeX entry
+IPS⁴o is free software provided under the BSD 2-Clause License described in the [LICENSE file](LICENSE). If you use IPS⁴o in an academic setting please cite the [eponymous paper](https://arxiv.org/abs/1705.02257) using the BibTeX entry
 
     @InProceedings{axtmann2017,
       author =	{Michael Axtmann and
