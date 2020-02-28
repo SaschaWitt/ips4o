@@ -38,17 +38,19 @@ If you get undefined references to `__atomic_fetch_add_16`, either set your CPU 
 
 IPS⁴o is free software provided under the BSD 2-Clause License described in the [LICENSE file](LICENSE). If you use IPS⁴o in an academic setting please cite the [eponymous paper](https://arxiv.org/abs/1705.02257) using the BibTeX entry
 
-    @InProceedings{axtmann2017,
-      author =	{Michael Axtmann and
-                    Sascha Witt and
-                    Daniel Ferizovic and
-                    Peter Sanders},
-      title =	{{In-Place Parallel Super Scalar Samplesort (IPSSSSo)}},
-      booktitle =	{25th Annual European Symposium on Algorithms (ESA 2017)},
-      pages =	{9:1--9:14},
-      series =	{Leibniz International Proceedings in Informatics (LIPIcs)},
-      year =	{2017},
-      volume =	{87},
-      publisher =	{Schloss Dagstuhl--Leibniz-Zentrum fuer Informatik},
-      doi =		{10.4230/LIPIcs.ESA.2017.9},
-    }
+```bibtex 
+@InProceedings{axtmann2017,
+  author =	{Michael Axtmann and
+                Sascha Witt and
+                Daniel Ferizovic and
+                Peter Sanders},
+  title =	{{In-Place Parallel Super Scalar Samplesort (IPSSSSo)}},
+  booktitle =	{25th Annual European Symposium on Algorithms (ESA 2017)},
+  pages =	{9:1--9:14},
+  series =	{Leibniz International Proceedings in Informatics (LIPIcs)},
+  year =	{2017},
+  volume =	{87},
+  publisher =	{Schloss Dagstuhl--Leibniz-Zentrum fuer Informatik},
+  doi =		{10.4230/LIPIcs.ESA.2017.9},
+}
+```
