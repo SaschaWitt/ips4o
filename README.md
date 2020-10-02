@@ -15,6 +15,15 @@ Here's the abstract:
 > a sequential algorithm, we are up to 1.5 times faster than the closest
 > sequential competitor, BlockQuicksort.
 
+**This repository is deprecated!** The current version of IPS⁴o is
+published at
+[https://github.com/ips4o/ips4o](https://github.com/ips4o/ips4o). You
+may also want to check out our prototypical implementation of In-place
+Parallel Super Scalar Radix Sort (IPS²Ra) at
+[https://github.com/ips4o/ips2ra](https://github.com/ips4o/ips2ra). IPS²Ra
+applies the in-place approach of IPS⁴o to radix sort. The new
+repositories support the CMake build system.
+
 ## Usage
 
 ```C++
